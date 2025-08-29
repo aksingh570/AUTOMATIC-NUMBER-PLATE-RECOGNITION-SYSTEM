@@ -1,0 +1,49 @@
+!pip install easyocr opencv-python-headless &> /dev/null
+
+import cv2
+import easyocr
+from google.colab import files
+
+uploaded = files.upload()
+
+if uploaded:
+    video_filename = next(iter(uploaded))
+    reader = easyocr.Reader(['en'], gpu=True)
+
+    cap = cv2.VideoCapture(video_filename)
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+    output_filename = 'output_with_plates.mp4'
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_filename, fourcc, fps, (frame_width, frame_height))
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        results = reader.readtext(frame)
+
+        for (bbox, text, prob) in results:
+            if len(text) > 4 and any(char.isdigit() for char in text):
+                (top_left, top_right, bottom_right, bottom_left) = bbox
+                top_left = tuple(map(int, top_left))
+                bottom_right = tuple(map(int, bottom_right))
+
+                cv2.rectangle(frame, top_left, bottom_right, (0, 255, 0), 2)
+                cv2.putText(frame, text.upper(), (top_left[0], top_left[1] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+        out.write(frame)
+
+    cap.release()
+    out.release()
+
+    try:
+        files.download(output_filename)
+    except Exception as e:
+        print(f"Download failed: {e}")
+else:
+    print("No file uploaded.")
